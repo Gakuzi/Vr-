@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VR DEBUG MODE</title>
+    <style>
+        body { 
+            margin: 0; background: #000; color: #fff; 
+            font-family: monospace; overflow: hidden;
+        }
+        
+        /* Debug Console */
+        #console-log {
+            position: fixed; top: 0; left: 0; width: 100%; height: 150px;
+            background: rgba(200, 0, 0, 0.8); color: white;
+            overflow-y: scroll; z-index: 9999; padding: 5px;
+            font-size: 10px; border-bottom: 2px solid white;
+            pointer-events: none; /* Пропускать клики сквозь лог */
+        }
+
+        /* Start Screen - Brutal Style to ensure visibility */
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; z-index: 5000;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+
+        #btn-start {
+            width: 80%; height: 80px;
+            background: #0f0; color: #000;
+            font-size: 24px; font-weight: bold;
+            border: none; border-radius: 10px;
+            margin-top: 50px; cursor: pointer;
+            text-transform: uppercase;
+        }
+        
+        #btn-start:active { background: #fff; }
+
+        /* VR Stage */
+        #vr-stage {
+            display: flex; width: 100%; height: 100%; position: relative;
+        }
+        .eye {
+            width: 50%; height: 100%; overflow: hidden; position: relative;
+            border: 1px solid #333;
+        }
+        .world {
+            position: absolute; top: 50%; left: 50%;
+            width: 150vw; height: 150vh;
+            transform: translate(-50%, -50%);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .world video, .world img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Controls */
+        #controls {
+            position: fixed; bottom: 20px; left: 0; width: 100%;
+            display: flex; justify-content: center; gap: 10px; z-index: 100;
+        }
+        .ctrl-btn {
+            background: rgba(255,255,255,0.2); border: 1px solid #fff; 
+            color: #fff; padding: 10px; border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- On-screen Debugger -->
+    <div id="console-log">LOG STARTED...<br></div>
+
+    <!-- Start Overlay -->
+    <div id="start-screen">
+        <h2>VR SYSTEM CHECK</h2>
+        <div id="status-text" style="color: yellow; padding: 10px; text-align: center;">Ожидание нажатия...</div>
+        <!-- Прямой вызов функции через onclick -->
+        <button id="btn-start" onclick="onStartClick()">ЗАПУСТИТЬ (CLICK ME)</button>
+    </div>
+
+    <!-- VR Content -->
+    <div id="vr-stage">
+        <div class="eye"><div class="world" id="w-left"></div></div>
+        <div class="eye"><div class="world" id="w-right"></div></div>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls">
+        <button class="ctrl-btn" onclick="setMode('cam')">Camera</button>
+        <button class="ctrl-btn" onclick="document.getElementById('f-vid').click()">Video</button>
+    </div>
+    
+    <input type="file" id="f-vid" accept="video/*" style="display:none" onchange="loadVideo(this)">
+
+    <script>
+        // --- LOGGER SYSTEM ---
+        function log(msg) {
+            const el = document.getElementById('console-log');
+            const line = document.createElement('div');
+            line.textContent = `> ${msg}`;
+            el.appendChild(line);
+            el.scrollTop = el.scrollHeight;
+            console.log(msg);
+        }
+
+        window.onerror = function(msg, url, line) {
+            log(`ERROR: ${msg} (Line ${line})`);
+            return false;
+        };
+
+        // --- INIT CHECKS ---
+        log("Page Loaded.");
+        if (!window.isSecureContext) {
+            log("WARNING: Not HTTPS! Sensors might fail.");
+            document.getElementById('status-text').innerText = "ВНИМАНИЕ: Нет HTTPS. Гироскоп может не работать.";
+        }
+
+        // --- CORE LOGIC ---
+        let currentX = 0, currentY = 0;
+        let targetX = 0, targetY = 0;
+        const wLeft = document.getElementById('w-left');
+        const wRight = document.getElementById('w-right');
+
+        async function onStartClick() {
+            log("Button CLICKED.");
+            const btn = document.getElementById('btn-start');
+            btn.style.background = 'yellow';
+            btn.innerText = "ЗАГРУЗКА...";
+
+            // 1. Fullscreen
+            try {
+                if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+                else if (document.documentElement.webkitRequestFullscreen) await document.documentElement.webkitRequestFullscreen();
+                log("Fullscreen requested.");
+            } catch(e) { log("Fullscreen warn: " + e.message); }
+
+            // 2. Gyro Permissions
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                log("iOS detected. Requesting Permission...");
+                try {
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    log("Permission Response: " + response);
+                    if (response === 'granted') {
+                        startLoop();
+                    } else {
+                        log("CRITICAL: Permission Denied by User.");
+                        alert("Вы запретили доступ к гироскопу.");
+                    }
+                } catch (e) {
+                    log("CRITICAL ERROR requesting permission: " + e.message);
+                    alert("Ошибка API: " + e.message);
+                }
+            } else {
+                log("Non-iOS or old device. Starting immediately.");
+                startLoop();
+            }
+        }
+
+        function startLoop() {
+            log("Starting Animation Loop...");
+            document.getElementById('start-screen').style.display = 'none';
+            window.addEventListener('deviceorientation', handleGyro);
+            animate();
+            log("Ready. Move device.");
+        }
+
+        function handleGyro(e) {
+            // log(`Gyro: a=${Math.round(e.alpha)} b=${Math.round(e.beta)} g=${Math.round(e.gamma)}`);
+            // Uncomment above line only if desperate - it floods the log
+            
+            let g = e.gamma || 0;
+            let b = e.beta || 0;
+
+            // Clamping
+            if (g > 45) g = 45; if (g < -45) g = -45;
+            if (b > 45) b = 45; if (b < -45) b = -45;
+
+            targetX = g * 10;
+            targetY = b * 10;
+        }
+
+        function animate() {
+            currentX += (targetX - currentX) * 0.1;
+            currentY += (targetY - currentY) * 0.1;
+
+            const tL = `translate(calc(-50% + ${currentX + 15}px), calc(-50% + ${currentY}px))`;
+            const tR = `translate(calc(-50% + ${currentX - 15}px), calc(-50% + ${currentY}px))`;
+
+            wLeft.style.transform = tL;
+            wRight.style.transform = tR;
+            
+            requestAnimationFrame(animate);
+        }
+
+        // --- MEDIA ---
+        async function setMode(mode) {
+            log("Mode: " + mode);
+            wLeft.innerHTML = ''; wRight.innerHTML = '';
+
+            if (mode === 'cam') {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: 'environment' } 
+                    });
+                    log("Camera stream obtained.");
+                    
+                    const v = document.createElement('video');
+                    v.srcObject = stream;
+                    v.autoplay = true; v.muted = true; v.playsInline = true;
+                    
+                    wLeft.appendChild(v);
+                    wRight.appendChild(v.cloneNode());
+                    // Re-assign stream to clone
+                    wRight.querySelector('video').srcObject = stream;
+                    
+                } catch(e) {
+                    log("Camera Error: " + e.message);
+                    alert("Камера недоступна: " + e.message);
+                }
+            }
+        }
+
+        function loadVideo(input) {
+            const file = input.files[0];
+            if (!file) return;
+            log("Video selected: " + file.name);
+            const url = URL.createObjectURL(file);
+            
+            wLeft.innerHTML = `<video src="${url}" autoplay loop playsinline muted></video>`;
+            wRight.innerHTML = `<video src="${url}" autoplay loop playsinline muted></video>`;
+            
+            // Sync hack
+            const v1 = wLeft.querySelector('video');
+            const v2 = wRight.querySelector('video');
+            v1.onplay = () => v2.play();
+            v1.onpause = () => v2.pause();
+        }
+
+    </script>
+</body>
+</html>
+
+
