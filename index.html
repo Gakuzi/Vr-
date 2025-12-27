@@ -3,492 +3,605 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>FPV VR PRO</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>FPV VR ULTIMATE</title>
     <style>
-        /* --- SYSTEM RESET --- */
+        /* --- SYSTEM CORE --- */
         :root {
-            --ui-bg: rgba(18, 18, 18, 0.95);
-            --ui-border: 1px solid rgba(255, 255, 255, 0.15);
-            --accent: #00ff41; /* Cyberpunk Green */
-            --text-main: #eee;
-            --text-dim: #888;
+            --bg: #000;
+            --ui-panel: rgba(20, 20, 25, 0.95);
+            --accent: #00d2ff; /* Cyber Blue */
+            --danger: #ff4444;
+            --text: #eee;
+            --border: 1px solid rgba(255,255,255,0.15);
         }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            background-color: #000; overflow: hidden;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: var(--text-main);
+            background: var(--bg); overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
         }
 
-        /* --- VR ENGINE LAYER --- */
-        #vr-stage {
+        /* --- VR VIEWPORT --- */
+        #vr-viewport {
             display: flex; width: 100%; height: 100%; position: relative; z-index: 1;
         }
         .eye {
             width: 50%; height: 100%; position: relative; overflow: hidden;
-            border-right: 1px solid #111; background: #000;
+            border-right: 1px solid #222; background: #000;
         }
         .eye:last-child { border-right: none; }
 
-        /* The movable container */
+        /* Movable World Container */
         .world {
-            position: absolute;
-            top: 50%; left: 50%;
-            /* Размеры задаются через JS в зависимости от настроек Zoom */
-            transform-origin: center center;
+            position: absolute; top: 50%; left: 50%;
+            /* Размеры контролируются JS */
+            transform: translate(-50%, -50%);
             display: flex; justify-content: center; align-items: center;
-            will-change: transform; 
+            will-change: transform;
+            transform-origin: center center;
         }
-
         .world img, .world video {
-            width: 100%; height: 100%; 
-            object-fit: cover; /* Или contain, меняется в настройках */
-            pointer-events: none;
+            width: 100%; height: 100%; pointer-events: none;
         }
 
-        /* --- UI OVERLAY SYSTEM --- */
-        #ui-layer {
+        /* --- HUD (HEADS UP DISPLAY) --- */
+        #hud {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 1000; pointer-events: none;
             display: flex; flex-direction: column; justify-content: space-between;
+            transition: opacity 0.2s;
         }
-
-        /* Top Bar */
-        .top-bar {
-            padding: 15px; display: flex; justify-content: space-between; align-items: flex-start;
-            pointer-events: auto; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+        
+        /* Top Status Bar */
+        .hud-top {
+            pointer-events: auto; padding: 10px 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent);
+            display: flex; justify-content: space-between; align-items: center;
         }
 
         /* Bottom Controls */
-        .dock {
+        .hud-bottom {
             pointer-events: auto; padding: 20px;
-            display: flex; justify-content: center; gap: 15px;
             background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;
         }
 
-        /* Buttons */
+        /* UI Elements */
         .btn {
-            background: rgba(30, 30, 30, 0.8); border: var(--ui-border);
-            color: white; padding: 12px 20px; border-radius: 8px;
-            font-size: 14px; font-weight: 600; text-transform: uppercase;
-            cursor: pointer; backdrop-filter: blur(5px); display: flex; align-items: center; gap: 8px;
+            background: rgba(40,40,40,0.8); border: var(--border); color: #fff;
+            padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 13px;
+            cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;
+            backdrop-filter: blur(4px); display: flex; align-items: center; gap: 8px;
         }
         .btn:active { background: var(--accent); color: #000; }
-        .btn-icon { font-size: 18px; }
-        .btn-primary { border-color: var(--accent); color: var(--accent); }
+        .btn.primary { border-color: var(--accent); color: var(--accent); }
+        .btn.danger { border-color: var(--danger); color: var(--danger); }
 
-        /* --- MODALS (Settings, Stream) --- */
-        .modal {
+        .badge {
+            font-size: 10px; background: #333; padding: 2px 6px; border-radius: 4px; color: #aaa;
+        }
+
+        /* --- MODALS --- */
+        .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.8); z-index: 2000;
             display: none; justify-content: center; align-items: center;
-            pointer-events: auto; backdrop-filter: blur(5px);
+            backdrop-filter: blur(8px); pointer-events: auto;
         }
-        .modal-box {
-            background: var(--ui-bg); border: var(--ui-border);
-            width: 90%; max-width: 400px; max-height: 80vh; overflow-y: auto;
-            border-radius: 12px; padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        .panel {
+            background: var(--ui-panel); border: var(--border); width: 90%; max-width: 450px;
+            max-height: 85vh; overflow-y: auto; border-radius: 12px; padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        .modal-header {
+        .panel-header {
             display: flex; justify-content: space-between; align-items: center;
             margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px;
         }
-        .modal-title { font-size: 18px; font-weight: bold; color: var(--accent); }
-        .close-btn { background: none; border: none; color: #666; font-size: 24px; cursor: pointer; }
+        .panel-title { color: var(--accent); font-weight: bold; font-size: 16px; }
 
-        /* Settings Inputs */
-        .setting-row { margin-bottom: 20px; }
-        .setting-label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-        .setting-val { color: var(--accent); font-family: monospace; }
+        /* Settings Grid */
+        .setting-group { margin-bottom: 25px; }
+        .setting-group-title { font-size: 11px; color: #666; text-transform: uppercase; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px; }
         
-        input[type="range"] {
-            width: 100%; height: 6px; background: #333; border-radius: 3px;
-            appearance: none; outline: none;
+        .control-row {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
         }
-        input[type="range"]::-webkit-slider-thumb {
-            appearance: none; width: 18px; height: 18px; background: var(--accent); border-radius: 50%; cursor: pointer;
-        }
+        .control-label { font-size: 14px; }
+        .control-input { width: 50%; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
         
-        input[type="text"] {
-            width: 100%; padding: 12px; background: #111; border: 1px solid #444;
-            color: #fff; border-radius: 6px; font-family: monospace; margin-bottom: 10px;
+        /* Custom Inputs */
+        input[type="range"] { width: 100%; accent-color: var(--accent); }
+        input[type="text"] { width: 100%; background: #111; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 4px; font-family: monospace; }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative; display: inline-block; width: 40px; height: 22px;
         }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #333; transition: .4s; border-radius: 22px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+            background-color: white; transition: .4s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(18px); }
 
-        /* --- UTILS --- */
-        .hidden { display: none !important; }
-        
-        #rotate-warning {
+        /* Orientation Alert */
+        #rotate-alert {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 9999; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
-            text-align: center; color: var(--accent);
+            background: #000; z-index: 5000; display: none;
+            flex-direction: column; justify-content: center; align-items: center; text-align: center;
         }
-        @media (orientation: portrait) { #rotate-warning { display: flex; } }
+        @media (orientation: portrait) { #rotate-alert { display: flex; } }
 
     </style>
 </head>
 <body>
 
-    <!-- 1. Rotate Warning -->
-    <div id="rotate-warning">
-        <div style="font-size: 50px; margin-bottom: 20px;">⟳</div>
-        <div>ПОВЕРНИТЕ ГОРИЗОНТАЛЬНО</div>
+    <!-- 1. ORIENTATION GUARD -->
+    <div id="rotate-alert">
+        <div style="font-size:40px; color:var(--accent); margin-bottom:20px">⟳</div>
+        <div>ПОВЕРНИТЕ УСТРОЙСТВО<br>ГОРИЗОНТАЛЬНО</div>
     </div>
 
-    <!-- 2. VR Stage -->
-    <div id="vr-stage" onclick="toggleUI()">
+    <!-- 2. VR SCENE -->
+    <div id="vr-viewport" onclick="UI.toggle()">
         <div class="eye"><div class="world" id="w-left"></div></div>
         <div class="eye"><div class="world" id="w-right"></div></div>
     </div>
 
-    <!-- 3. UI Layer -->
-    <div id="ui-layer">
-        <div class="top-bar">
-            <button class="btn" onclick="openSettings(event)">⚙ Настройки</button>
-            <button class="btn" onclick="App.recenter(event)">🎯 Центр</button>
+    <!-- 3. HUD INTERFACE -->
+    <div id="hud">
+        <div class="hud-top">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="badge" id="stat-fps">FPS: 60</span>
+                <span class="badge" id="stat-mode">GYRO</span>
+            </div>
+            <button class="btn" onclick="UI.openSettings(event)">⚙ Настройки</button>
         </div>
-        
-        <div class="dock">
-            <button class="btn" onclick="openStreamModal(event)">📡 URL Потока</button>
-            <button class="btn" onclick="triggerFile('img', event)">🖼 Фото</button>
-            <button class="btn" onclick="triggerFile('vid', event)">🎬 Видео</button>
-            <button class="btn btn-primary" onclick="App.init(event)">🚀 START / CAM</button>
+
+        <div class="hud-bottom">
+            <button class="btn" onclick="UI.openStream(event)">📡 URL Потока</button>
+            <button class="btn" onclick="Files.trigger('img')">🖼 Фото</button>
+            <button class="btn" onclick="Files.trigger('vid')">🎬 Видео</button>
+            <button class="btn primary" onclick="Core.start(event)">🚀 СТАРТ / КАМЕРА</button>
         </div>
     </div>
 
-    <!-- 4. Settings Modal -->
-    <div id="modal-settings" class="modal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div class="modal-title">НАСТРОЙКИ VR</div>
-                <button class="close-btn" onclick="closeModals()">×</button>
-            </div>
-            
-            <div class="setting-row">
-                <div class="setting-label">IPD (Стерео база) <span id="val-ipd" class="setting-val">0</span></div>
-                <input type="range" min="0" max="60" value="15" oninput="Config.set('ipd', this.value)">
+    <!-- 4. SETTINGS PANEL -->
+    <div id="modal-settings" class="modal-overlay">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">НАСТРОЙКИ FPV VR</div>
+                <button class="btn danger" style="padding:5px 10px;" onclick="UI.closeModals()">✕</button>
             </div>
 
-            <div class="setting-row">
-                <div class="setting-label">Масштаб (Zoom) <span id="val-scale" class="setting-val">100%</span></div>
-                <input type="range" min="50" max="300" value="140" oninput="Config.set('scale', this.value)">
+            <!-- Sensor Control -->
+            <div class="setting-group">
+                <div class="setting-group-title">Датчики и Трекинг</div>
+                
+                <div class="control-row">
+                    <div class="control-label">Включить трекинг</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="cfg-tracking" onchange="Config.update('tracking', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-label">Режим источника</div>
+                    <select id="cfg-source" onchange="Config.update('source', this.value)" style="background:#333; color:#fff; padding:5px; border:none; border-radius:4px;">
+                        <option value="gyro">Гироскоп (Наклон)</option>
+                        <option value="compass">Компас (Поворот 360)</option>
+                    </select>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-label">Блок. вертикали (Y)</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="cfg-lockY" onchange="Config.update('lockY', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-label">Сглаживание (Anti-Shake) <br><span style="font-size:10px; color:#888;">Ниже = Плавнее</span></div>
+                    <div class="control-input">
+                        <input type="range" min="1" max="50" id="cfg-smooth" oninput="Config.update('smooth', this.value)">
+                        <span id="lbl-smooth" style="width:30px; text-align:right">10</span>
+                    </div>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-label">Чувствительность</div>
+                    <div class="control-input">
+                        <input type="range" min="1" max="50" id="cfg-sens" oninput="Config.update('sens', this.value)">
+                        <span id="lbl-sens" style="width:30px; text-align:right">15</span>
+                    </div>
+                </div>
             </div>
 
-            <div class="setting-row">
-                <div class="setting-label">Чувствительность гиро <span id="val-sens" class="setting-val">15</span></div>
-                <input type="range" min="0" max="50" value="15" oninput="Config.set('sensitivity', this.value)">
-                <div style="font-size:10px; color:#666; margin-top:5px;">Поставьте 0 чтобы отключить гироскоп (статичный экран)</div>
-            </div>
+            <!-- Visuals -->
+            <div class="setting-group">
+                <div class="setting-group-title">Оптика и Экран</div>
+                
+                <div class="control-row">
+                    <div class="control-label">IPD (Сдвиг глаз)</div>
+                    <div class="control-input">
+                        <input type="range" min="0" max="100" id="cfg-ipd" oninput="Config.update('ipd', this.value)">
+                        <span id="lbl-ipd" style="width:30px; text-align:right">15</span>
+                    </div>
+                </div>
 
-            <div class="setting-row">
-                <div class="setting-label">Режим заполнения</div>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn" onclick="Config.set('fit', 'cover')" style="flex:1; padding:8px;">Cover (Полный)</button>
-                    <button class="btn" onclick="Config.set('fit', 'contain')" style="flex:1; padding:8px;">Contain (Весь кадр)</button>
+                <div class="control-row">
+                    <div class="control-label">Масштаб (Zoom)</div>
+                    <div class="control-input">
+                        <input type="range" min="50" max="300" id="cfg-scale" oninput="Config.update('scale', this.value)">
+                        <span id="lbl-scale" style="width:30px; text-align:right">140</span>
+                    </div>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-label">Центрировать датчики</div>
+                    <button class="btn" style="padding:5px 10px; font-size:10px;" onclick="Core.recenter()">СБРОС НУЛЯ</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 5. Stream Input Modal -->
-    <div id="modal-stream" class="modal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div class="modal-title">FPV ПОТОК</div>
-                <button class="close-btn" onclick="closeModals()">×</button>
+    <!-- 5. STREAM MODAL -->
+    <div id="modal-stream" class="modal-overlay">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">URL ВИДЕОПОТОКА</div>
+                <button class="btn danger" style="padding:5px 10px;" onclick="UI.closeModals()">✕</button>
             </div>
-            <p style="font-size:12px; color:#888; margin-bottom:15px;">
-                Поддерживается: HLS (.m3u8), MP4, WebM, MJPEG.<br>
-                RTSP не работает в браузере! Используйте HTTP конвертеры.
-            </p>
-            <input type="text" id="stream-url" placeholder="http://192.168.1.1:8080/video">
-            <button class="btn btn-primary" style="width:100%" onclick="loadStreamFromInput()">ЗАПУСТИТЬ</button>
-            
-            <div style="margin-top:20px; border-top:1px solid #333; padding-top:10px;">
-                <p style="font-size:12px; color:#666">Тестовые потоки:</p>
-                <button class="btn" style="width:100%; font-size:10px; margin-bottom:5px;" onclick="loadDemo('hls')">Demo HLS (Apple)</button>
-                <button class="btn" style="width:100%; font-size:10px;" onclick="loadDemo('bunny')">Demo MP4 (Bunny)</button>
+            <div class="setting-group">
+                <input type="text" id="stream-input" placeholder="http://192.168.1.1:8080/video.mjpeg">
+                <div style="font-size:11px; color:#888; margin-top:5px;">Поддержка: HLS (.m3u8), MJPEG, WebM. Для RTSP нужен HTTP-конвертер.</div>
             </div>
+            <button class="btn primary" style="width:100%; justify-content:center;" onclick="Files.loadStream()">ЗАПУСТИТЬ</button>
         </div>
     </div>
 
-    <!-- Hidden Files -->
-    <input type="file" id="file-img" accept="image/*" style="display:none" onchange="handleFile(this, 'img')">
-    <input type="file" id="file-vid" accept="video/*" style="display:none" onchange="handleFile(this, 'vid')">
+    <!-- HIDDEN INPUTS -->
+    <input type="file" id="inp-img" accept="image/*" style="display:none" onchange="Files.handle(this, 'img')">
+    <input type="file" id="inp-vid" accept="video/*" style="display:none" onchange="Files.handle(this, 'vid')">
 
     <script>
-        // --- CONFIG MANAGER ---
+        // --- CONFIGURATION ENGINE ---
         const Config = {
-            ipd: 15,          // Сдвиг между глазами (px)
-            scale: 140,       // Zoom (%)
-            sensitivity: 15,  // Гироскоп мультпликатор
-            smoothing: 0.1,   // Плавность (меньше = плавнее)
-            fit: 'cover',     // object-fit
+            tracking: true,     // Master switch
+            source: 'gyro',     // 'gyro' (tilt) or 'compass' (rotation)
+            lockY: false,       // Disable vertical movement
+            smooth: 20,         // Smoothing factor (higher int = slower/smoother div factor)
+            sens: 15,           // Sensitivity
+            ipd: 15,            // Stereo offset
+            scale: 140,         // Zoom %
+            fit: 'cover',       // Object fit
+
+            // Update state and UI
+            update: function(key, val) {
+                if (key === 'smooth' || key === 'sens' || key === 'ipd' || key === 'scale') {
+                    this[key] = parseInt(val);
+                    document.getElementById(`lbl-${key}`).innerText = val;
+                } else {
+                    this[key] = val;
+                }
+
+                // Apply visual changes instantly
+                if (key === 'scale') AppVisuals.applyScale();
+                if (key === 'ipd') AppVisuals.render(Core.cx, Core.cy); // Redraw frame
+                if (key === 'source' || key === 'tracking') {
+                    document.getElementById('stat-mode').innerText = !this.tracking ? 'OFF' : this.source.toUpperCase();
+                    Core.recenter();
+                }
+
+                // Save
+                localStorage.setItem('fpv_vr_cfg_v2', JSON.stringify(this));
+            },
 
             load: function() {
-                const saved = localStorage.getItem('vr_config_v1');
+                const saved = localStorage.getItem('fpv_vr_cfg_v2');
                 if (saved) {
-                    const parsed = JSON.parse(saved);
-                    Object.assign(this, parsed);
+                    const obj = JSON.parse(saved);
+                    Object.assign(this, obj);
                 }
-                this.updateUI();
-                this.apply();
-            },
-
-            set: function(key, val) {
-                this[key] = val;
-                this.updateUI();
-                this.apply();
-                localStorage.setItem('vr_config_v1', JSON.stringify(this));
-            },
-
-            updateUI: function() {
-                document.getElementById('val-ipd').innerText = this.ipd + 'px';
-                document.getElementById('val-scale').innerText = this.scale + '%';
-                document.getElementById('val-sens').innerText = this.sensitivity;
-                // Update inputs positions
-                document.querySelector(`input[oninput*="'ipd'"]`).value = this.ipd;
-                document.querySelector(`input[oninput*="'scale'"]`).value = this.scale;
-                document.querySelector(`input[oninput*="'sensitivity'"]`).value = this.sensitivity;
-            },
-
-            apply: function() {
-                // Apply Scale
-                const w = document.querySelectorAll('.world');
-                w.forEach(el => {
-                    el.style.width = this.scale + 'vw';
-                    el.style.height = this.scale + 'vh';
-                });
+                // Sync UI
+                document.getElementById('cfg-tracking').checked = this.tracking;
+                document.getElementById('cfg-source').value = this.source;
+                document.getElementById('cfg-lockY').checked = this.lockY;
+                document.getElementById('cfg-smooth').value = this.smooth;
+                document.getElementById('lbl-smooth').innerText = this.smooth;
+                document.getElementById('cfg-sens').value = this.sens;
+                document.getElementById('lbl-sens').innerText = this.sens;
+                document.getElementById('cfg-ipd').value = this.ipd;
+                document.getElementById('lbl-ipd').innerText = this.ipd;
+                document.getElementById('cfg-scale').value = this.scale;
+                document.getElementById('lbl-scale').innerText = this.scale;
                 
-                // Apply Object Fit
-                const content = document.querySelectorAll('.world img, .world video');
-                content.forEach(el => el.style.objectFit = this.fit);
-
-                // Recalculate immediate position if gyro is off
-                if (parseInt(this.sensitivity) === 0) {
-                    App.targetX = 0; App.targetY = 0;
-                }
+                document.getElementById('stat-mode').innerText = !this.tracking ? 'OFF' : this.source.toUpperCase();
+                AppVisuals.applyScale();
             }
         };
 
-        // --- CORE APPLICATION ---
-        const App = {
-            isRunning: false,
-            baseBeta: null,
-            baseGamma: null,
-            curX: 0, curY: 0,
-            targetX: 0, targetY: 0,
+        // --- CORE TRACKING ENGINE ---
+        const Core = {
+            active: false,
+            // Position State
+            cx: 0, cy: 0,       // Current smoothed position
+            tx: 0, ty: 0,       // Target position from sensors
+            
+            // Calibration
+            refAlpha: null,
+            refBeta: null,
+            refGamma: null,
 
-            init: async function(e) {
+            start: async function(e) {
                 if(e) e.stopPropagation();
-
-                // 1. Fullscreen
+                
+                // Fullscreen
                 const doc = document.documentElement;
                 if(doc.requestFullscreen) doc.requestFullscreen().catch(()=>{});
-                else if(doc.webkitRequestFullscreen) doc.webkitRequestFullscreen().catch(()=>{});
 
-                // 2. Permissions
+                // Permissions (iOS)
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                     try {
                         const r = await DeviceOrientationEvent.requestPermission();
-                        if(r !== 'granted') alert("Гироскоп запрещен. Используйте настройки, чтобы отключить его.");
+                        if(r !== 'granted') return alert("Нет доступа к датчикам!");
                     } catch(err) { console.error(err); }
                 }
 
-                // 3. Start Camera Default
-                this.startCamera();
+                // Start Camera Default
+                Files.startCamera();
 
-                // 4. Start Loops
-                window.addEventListener('deviceorientation', this.handleGyro.bind(this));
-                if (!this.isRunning) {
-                    this.isRunning = true;
+                if (!this.active) {
+                    window.addEventListener('deviceorientation', this.handleSensor.bind(this));
+                    this.active = true;
                     this.loop();
-                }
-                
-                // Hide UI initially
-                document.getElementById('ui-layer').style.opacity = '0';
-                setTimeout(() => document.getElementById('ui-layer').style.pointerEvents = 'none', 300);
-            },
-
-            recenter: function(e) {
-                if(e) e.stopPropagation();
-                this.baseBeta = null; // Will reset on next frame
-                this.baseGamma = null;
-                // Visual feedback
-                const btn = e ? e.target : null;
-                if(btn) {
-                    const old = btn.innerText;
-                    btn.innerText = "OK!";
-                    setTimeout(()=> btn.innerText = old, 1000);
+                    UI.toggle(false); // Hide UI
                 }
             },
 
-            handleGyro: function(e) {
-                if (parseInt(Config.sensitivity) === 0) return; // Gyro Disabled
+            recenter: function() {
+                this.refAlpha = null;
+                this.refBeta = null;
+                this.refGamma = null;
+                this.cx = 0; this.cy = 0;
+                this.tx = 0; this.ty = 0;
+            },
 
-                const rawBeta = e.beta || 0;
-                const rawGamma = e.gamma || 0;
+            handleSensor: function(e) {
+                if (!Config.tracking) return;
 
-                if (this.baseBeta === null) {
-                    this.baseBeta = rawBeta;
-                    this.baseGamma = rawGamma;
+                // 1. Get Raw Data
+                // Alpha: 0-360 (Compass)
+                // Beta: -180 to 180 (Front/Back Tilt)
+                // Gamma: -90 to 90 (Left/Right Tilt)
+                const alpha = e.alpha || 0; 
+                const beta = e.beta || 0;
+                const gamma = e.gamma || 0;
+
+                // 2. Calibration (Set Zero)
+                if (this.refAlpha === null) {
+                    this.refAlpha = alpha;
+                    this.refBeta = beta;
+                    this.refGamma = gamma;
                     return;
                 }
 
-                let dX = rawGamma - this.baseGamma; // Up/Down (Landscape)
-                let dY = rawBeta - this.baseBeta;   // Left/Right (Landscape)
+                // 3. Calculate Delta based on Mode
+                let dx = 0, dy = 0;
 
-                // Clamp to avoid flipping
-                dX = Math.max(-45, Math.min(45, dX));
-                dY = Math.max(-45, Math.min(45, dY));
+                if (Config.source === 'compass') {
+                    // COMPASS MODE (Alpha for Pan, Gamma for Tilt)
+                    // Calculate shortest angle distance for compass wrap-around
+                    let dAlpha = alpha - this.refAlpha;
+                    if (dAlpha > 180) dAlpha -= 360;
+                    if (dAlpha < -180) dAlpha += 360;
+                    
+                    dx = dAlpha; // Rotate X
+                    dy = (beta - this.refBeta); // Tilt Y
+                } else {
+                    // GYRO MODE (Standard Tilt)
+                    // Landscape: Gamma = Up/Down, Beta = Left/Right
+                    // Note: Axes might flip on some devices, this is standard implementation
+                    dx = (beta - this.refBeta);
+                    dy = (gamma - this.refGamma);
+                }
 
-                // Mapping: In landscape, Gamma affects Y screen axis (up/down), Beta affects X (left/right)
-                // Wait, browsers are messy. Standard landscape:
-                // Beta is tilt front/back (Screen X axis shift)
-                // Gamma is tilt left/right (Screen Y axis shift)
+                // 4. Deadzone (Ignore micro jitters)
+                const deadzone = 0.5; // degrees
+                if (Math.abs(dx) < deadzone) dx = 0;
+                if (Math.abs(dy) < deadzone) dy = 0;
+
+                // 5. Apply Limits & Locks
+                if (Config.lockY) dy = 0;
                 
-                this.targetX = dY * Config.sensitivity; // Beta -> X
-                this.targetY = dX * Config.sensitivity; // Gamma -> Y
+                // Clamp max movement to avoid going off-canvas
+                const limit = 50; 
+                dx = Math.max(-limit, Math.min(limit, dx));
+                dy = Math.max(-limit, Math.min(limit, dy));
+
+                // 6. Set Target (Inverted X usually feels more natural for "Window" effect)
+                // But for "Head Tracking" (FPV), regular direction is better.
+                // Let's use Standard: Turn Right -> View moves Left (Camera rotates Right)
+                this.tx = -dx * Config.sens;
+                this.ty = -dy * Config.sens;
             },
 
             loop: function() {
-                if (!this.isRunning) return;
+                if (!this.active) return;
 
-                // Smoothing
-                this.curX += (this.targetX - this.curX) * Config.smoothing;
-                this.curY += (this.targetY - this.curY) * Config.smoothing;
-
-                const ipd = parseInt(Config.ipd);
+                // Low Pass Filter (Smoothing)
+                // Formula: Current = Current + (Target - Current) / SmoothFactor
+                // High SmoothFactor (e.g., 20) = Very Slow/Smooth. Low (1) = Instant/Shaky.
                 
-                // Left Eye (Shift content Right)
-                const tL = `translate(calc(-50% + ${this.curX + ipd}px), calc(-50% + ${this.curY}px))`;
-                // Right Eye (Shift content Left)
-                const tR = `translate(calc(-50% + ${this.curX - ipd}px), calc(-50% + ${this.curY}px))`;
+                const factor = Math.max(1, Config.smooth);
+                
+                // If tracking is off, lerp to 0
+                if (!Config.tracking) {
+                    this.tx = 0; this.ty = 0;
+                }
 
-                document.getElementById('w-left').style.transform = tL;
-                document.getElementById('w-right').style.transform = tR;
+                this.cx += (this.tx - this.cx) / factor;
+                this.cy += (this.ty - this.cy) / factor;
 
+                AppVisuals.render(this.cx, this.cy);
                 requestAnimationFrame(this.loop.bind(this));
+            }
+        };
+
+        // --- VISUAL ENGINE ---
+        const AppVisuals = {
+            wL: document.getElementById('w-left'),
+            wR: document.getElementById('w-right'),
+
+            applyScale: function() {
+                [this.wL, this.wR].forEach(el => {
+                    el.style.width = Config.scale + 'vw';
+                    el.style.height = Config.scale + 'vh';
+                    // Re-apply object fit to children
+                    const media = el.querySelector('img, video');
+                    if(media) media.style.objectFit = Config.fit;
+                });
+            },
+
+            render: function(x, y) {
+                // Apply Stereo Offset (IPD)
+                // Left Eye needs positive shift, Right needs negative
+                const ipd = Config.ipd;
+                
+                this.wL.style.transform = `translate(calc(-50% + ${x + ipd}px), calc(-50% + ${y}px))`;
+                this.wR.style.transform = `translate(calc(-50% + ${x - ipd}px), calc(-50% + ${y}px))`;
+            }
+        };
+
+        // --- FILE & STREAM MANAGER ---
+        const Files = {
+            clear: function() {
+                const els = document.querySelectorAll('.world');
+                els.forEach(el => el.innerHTML = '');
+                // Stop videos
+                document.querySelectorAll('video').forEach(v => {
+                    v.pause();
+                    v.src = "";
+                });
+            },
+
+            trigger: function(type) {
+                document.getElementById('inp-' + type).click();
+                UI.toggle(false);
+            },
+
+            handle: function(input, type) {
+                const f = input.files[0];
+                if (!f) return;
+                const url = URL.createObjectURL(f);
+                this.inject(url, type === 'img' ? 'img' : 'video');
+            },
+            
+            loadStream: function() {
+                const url = document.getElementById('stream-input').value;
+                if(url) {
+                    this.inject(url, 'video');
+                    UI.closeModals();
+                    UI.toggle(false);
+                }
             },
 
             startCamera: async function() {
                 this.clear();
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'environment', width: { ideal: 1920 } }, audio: false
+                        video: { facingMode: 'environment', width: { ideal: 1920 } }
                     });
-                    this.injectVideo(stream, true); // true = isStreamObject
+                    
+                    const vL = this.createMedia('video');
+                    vL.srcObject = stream;
+                    
+                    const vR = this.createMedia('video');
+                    vR.srcObject = stream;
+
+                    document.getElementById('w-left').appendChild(vL);
+                    document.getElementById('w-right').appendChild(vR);
+                    AppVisuals.applyScale();
                 } catch(e) {
-                    alert("Ошибка камеры (нужен HTTPS): " + e.message);
+                    alert("Камера недоступна. Проверьте HTTPS.");
                 }
             },
 
-            clear: function() {
-                document.getElementById('w-left').innerHTML = '';
-                document.getElementById('w-right').innerHTML = '';
-                // Stop existing streams?
-            },
-
-            injectVideo: function(source, isStreamObject = false) {
-                const createV = () => {
-                    const v = document.createElement('video');
-                    v.autoplay = true; v.muted = true; v.loop = true;
-                    v.playsInline = true; v.setAttribute('playsinline', '');
-                    v.style.objectFit = Config.fit;
-                    if (isStreamObject) v.srcObject = source;
-                    else {
-                        v.src = source;
-                        v.crossOrigin = "anonymous"; // Try CORS
-                    }
-                    return v;
-                };
-
-                const vL = createV();
-                const vR = createV(); 
+            inject: function(url, type) {
+                this.clear();
+                const mL = this.createMedia(type, url);
+                const mR = this.createMedia(type, url);
                 
-                // Sync Logic
-                if (!isStreamObject) {
-                    vL.addEventListener('play', () => vR.play());
-                    vL.addEventListener('pause', () => vR.pause());
-                    vL.addEventListener('seeking', () => vR.currentTime = vL.currentTime);
-                    // Force sync interval
-                    setInterval(() => {
-                        if (Math.abs(vL.currentTime - vR.currentTime) > 0.2) vR.currentTime = vL.currentTime;
-                    }, 2000);
+                // Video Sync
+                if (type === 'video') {
+                    mL.addEventListener('play', () => mR.play());
+                    mL.addEventListener('pause', () => mR.pause());
+                    mL.addEventListener('seeking', () => mR.currentTime = mL.currentTime);
                 }
 
-                document.getElementById('w-left').appendChild(vL);
-                document.getElementById('w-right').appendChild(vR);
+                document.getElementById('w-left').appendChild(mL);
+                document.getElementById('w-right').appendChild(mR);
+                AppVisuals.applyScale();
             },
-            
-            injectImage: function(src) {
-                const html = `<img src="${src}" style="object-fit:${Config.fit}">`;
-                document.getElementById('w-left').innerHTML = html;
-                document.getElementById('w-right').innerHTML = html;
+
+            createMedia: function(type, src) {
+                let el;
+                if (type === 'img') {
+                    el = document.createElement('img');
+                    el.src = src;
+                } else {
+                    el = document.createElement('video');
+                    if (src) el.src = src;
+                    el.autoplay = true; el.muted = true; el.loop = true;
+                    el.playsInline = true; el.setAttribute('playsinline', '');
+                    el.crossOrigin = "anonymous";
+                }
+                el.style.objectFit = Config.fit;
+                return el;
             }
         };
 
-        // --- UI HANDLERS ---
-        function toggleUI() {
-            const ui = document.getElementById('ui-layer');
-            const op = ui.style.opacity;
-            if (op === '0' || op === '') {
-                ui.style.opacity = '1';
-                ui.style.pointerEvents = 'auto';
-            } else {
-                ui.style.opacity = '0';
-                ui.style.pointerEvents = 'none';
+        // --- UI MANAGER ---
+        const UI = {
+            visible: true,
+            toggle: function(forceState) {
+                // Ignore clicks if clicking on modal or buttons
+                if (event && event.target.closest('.btn, .panel, .toggle-switch, input, select')) return;
+
+                const hud = document.getElementById('hud');
+                if (typeof forceState !== 'undefined') this.visible = forceState;
+                else this.visible = !this.visible;
+                
+                hud.style.opacity = this.visible ? '1' : '0';
+                hud.style.pointerEvents = this.visible ? 'auto' : 'none';
+            },
+
+            openSettings: function(e) {
+                e.stopPropagation();
+                document.getElementById('modal-settings').style.display = 'flex';
+            },
+
+            openStream: function(e) {
+                e.stopPropagation();
+                document.getElementById('modal-stream').style.display = 'flex';
+            },
+
+            closeModals: function() {
+                document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
             }
-        }
+        };
 
-        function openSettings(e) {
-            e.stopPropagation();
-            document.getElementById('modal-settings').style.display = 'flex';
-        }
-
-        function openStreamModal(e) {
-            e.stopPropagation();
-            document.getElementById('modal-stream').style.display = 'flex';
-        }
-
-        function closeModals() {
-            document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-        }
-
-        function triggerFile(type, e) {
-            e.stopPropagation();
-            document.getElementById('file-' + type).click();
-        }
-
-        function handleFile(input, type) {
-            const f = input.files[0];
-            if (!f) return;
-            const url = URL.createObjectURL(f);
-            App.clear();
-            if (type === 'img') App.injectImage(url);
-            else App.injectVideo(url);
-        }
-
-        function loadStreamFromInput() {
-            const url = document.getElementById('stream-url').value;
-            if (!url) return;
-            App.clear();
-            App.injectVideo(url);
-            closeModals();
-        }
-
-        function loadDemo(type) {
-            const url = type === 'hls' 
-                ? 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
-                : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-            document.getElementById('stream-url').value = url;
-            loadStreamFromInput();
-        }
-
-        // Init
+        // Initialize Config
         Config.load();
 
     </script>
