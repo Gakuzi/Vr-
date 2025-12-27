@@ -3,238 +3,285 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VR DEBUG MODE</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Spatial VR Viewer</title>
     <style>
-        body { 
-            margin: 0; background: #000; color: #fff; 
-            font-family: monospace; overflow: hidden;
-        }
-        
-        /* Debug Console */
-        #console-log {
-            position: fixed; top: 0; left: 0; width: 100%; height: 150px;
-            background: rgba(200, 0, 0, 0.8); color: white;
-            overflow-y: scroll; z-index: 9999; padding: 5px;
-            font-size: 10px; border-bottom: 2px solid white;
-            pointer-events: none; /* Пропускать клики сквозь лог */
+        /* --- CORE --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #000; overflow: hidden;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #fff;
         }
 
-        /* Start Screen - Brutal Style to ensure visibility */
+        /* --- ROTATE HINT (Portrait only) --- */
+        #rotate-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999;
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            text-align: center;
+        }
+        .icon-rotate {
+            width: 40px; height: 64px; border: 3px solid #fff; border-radius: 6px;
+            animation: spin 2s infinite ease-in-out; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% {transform: rotate(0deg);} 50% {transform: rotate(90deg);} 100% {transform: rotate(0deg);} }
+        
+        @media (orientation: portrait) {
+            #rotate-overlay { display: flex; }
+        }
+
+        /* --- START SCREEN --- */
         #start-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; z-index: 5000;
+            background: #000; z-index: 5000;
             display: flex; flex-direction: column;
             justify-content: center; align-items: center;
-        }
-
-        #btn-start {
-            width: 80%; height: 80px;
-            background: #0f0; color: #000;
-            font-size: 24px; font-weight: bold;
-            border: none; border-radius: 10px;
-            margin-top: 50px; cursor: pointer;
-            text-transform: uppercase;
+            transition: opacity 0.5s;
         }
         
-        #btn-start:active { background: #fff; }
+        button.start-btn {
+            background: transparent; border: 2px solid #0f0; color: #0f0;
+            padding: 15px 40px; font-size: 18px; border-radius: 30px;
+            text-transform: uppercase; letter-spacing: 2px; cursor: pointer;
+            font-weight: bold;
+        }
+        button.start-btn:active { background: rgba(0, 255, 0, 0.2); }
 
-        /* VR Stage */
+        /* --- VR STAGE --- */
         #vr-stage {
-            display: flex; width: 100%; height: 100%; position: relative;
+            display: flex; width: 100%; height: 100%; position: relative; z-index: 1;
         }
         .eye {
-            width: 50%; height: 100%; overflow: hidden; position: relative;
-            border: 1px solid #333;
+            width: 50%; height: 100%; position: relative; overflow: hidden;
+            border-right: 1px solid #222; background: #000;
         }
+        .eye:last-child { border-right: none; }
+
+        /* The Content World - 160% size for spatial looking */
         .world {
             position: absolute; top: 50%; left: 50%;
-            width: 150vw; height: 150vh;
+            width: 160vw; height: 160vh;
             transform: translate(-50%, -50%);
             display: flex; justify-content: center; align-items: center;
+            will-change: transform;
         }
-        .world video, .world img { width: 100%; height: 100%; object-fit: cover; }
+        .world img, .world video {
+            width: 100%; height: 100%; object-fit: cover;
+        }
 
-        /* Controls */
-        #controls {
-            position: fixed; bottom: 20px; left: 0; width: 100%;
-            display: flex; justify-content: center; gap: 10px; z-index: 100;
+        /* --- CONTROLS UI --- */
+        #ui-layer {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 100px;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 100; pointer-events: none;
+            transition: opacity 0.3s;
         }
-        .ctrl-btn {
-            background: rgba(255,255,255,0.2); border: 1px solid #fff; 
-            color: #fff; padding: 10px; border-radius: 5px;
+        .hidden { opacity: 0; }
+        
+        .dock {
+            background: rgba(20,20,20,0.8); backdrop-filter: blur(10px);
+            padding: 10px 20px; border-radius: 30px;
+            display: flex; gap: 15px; pointer-events: auto;
+            border: 1px solid rgba(255,255,255,0.1);
         }
+
+        .dock button {
+            background: transparent; border: 1px solid #fff; color: #fff;
+            padding: 8px 16px; border-radius: 20px; font-size: 12px;
+            text-transform: uppercase; cursor: pointer;
+        }
+        .dock button:active { background: rgba(255,255,255,0.3); }
+
     </style>
 </head>
 <body>
 
-    <!-- On-screen Debugger -->
-    <div id="console-log">LOG STARTED...<br></div>
-
-    <!-- Start Overlay -->
-    <div id="start-screen">
-        <h2>VR SYSTEM CHECK</h2>
-        <div id="status-text" style="color: yellow; padding: 10px; text-align: center;">Ожидание нажатия...</div>
-        <!-- Прямой вызов функции через onclick -->
-        <button id="btn-start" onclick="onStartClick()">ЗАПУСТИТЬ (CLICK ME)</button>
+    <!-- 1. Rotate Warning -->
+    <div id="rotate-overlay">
+        <div class="icon-rotate"></div>
+        <p>Поверните горизонтально</p>
     </div>
 
-    <!-- VR Content -->
+    <!-- 2. Start Screen (Required for iOS Permissions) -->
+    <div id="start-screen">
+        <button class="start-btn" onclick="startVR()">Войти в VR</button>
+        <p style="color:#666; font-size:12px; margin-top:15px">Требуется доступ к датчикам</p>
+    </div>
+
+    <!-- 3. VR Scene -->
     <div id="vr-stage">
         <div class="eye"><div class="world" id="w-left"></div></div>
         <div class="eye"><div class="world" id="w-right"></div></div>
     </div>
 
-    <!-- Controls -->
-    <div id="controls">
-        <button class="ctrl-btn" onclick="setMode('cam')">Camera</button>
-        <button class="ctrl-btn" onclick="document.getElementById('f-vid').click()">Video</button>
+    <!-- 4. Controls -->
+    <div id="ui-layer">
+        <div class="dock">
+            <button onclick="document.getElementById('f-photo').click()">Фото</button>
+            <button onclick="document.getElementById('f-video').click()">Видео</button>
+            <button onclick="activateCamera()">Камера</button>
+        </div>
     </div>
-    
-    <input type="file" id="f-vid" accept="video/*" style="display:none" onchange="loadVideo(this)">
+
+    <!-- Hidden Inputs -->
+    <input type="file" id="f-photo" accept="image/*" style="display:none" onchange="loadFile(this, 'img')">
+    <input type="file" id="f-video" accept="video/*" style="display:none" onchange="loadFile(this, 'vid')">
 
     <script>
-        // --- LOGGER SYSTEM ---
-        function log(msg) {
-            const el = document.getElementById('console-log');
-            const line = document.createElement('div');
-            line.textContent = `> ${msg}`;
-            el.appendChild(line);
-            el.scrollTop = el.scrollHeight;
-            console.log(msg);
-        }
+        // --- SETTINGS ---
+        const SENSITIVITY = 12; // Коэффициент движения (пиксели на градус)
+        const SMOOTHING = 0.08; // Плавность (меньше = плавнее)
+        const STEREO_GAP = 14;  // Сдвиг для 3D эффекта
 
-        window.onerror = function(msg, url, line) {
-            log(`ERROR: ${msg} (Line ${line})`);
-            return false;
-        };
-
-        // --- INIT CHECKS ---
-        log("Page Loaded.");
-        if (!window.isSecureContext) {
-            log("WARNING: Not HTTPS! Sensors might fail.");
-            document.getElementById('status-text').innerText = "ВНИМАНИЕ: Нет HTTPS. Гироскоп может не работать.";
-        }
-
-        // --- CORE LOGIC ---
+        // --- STATE ---
+        let isRunning = false;
         let currentX = 0, currentY = 0;
         let targetX = 0, targetY = 0;
         const wLeft = document.getElementById('w-left');
         const wRight = document.getElementById('w-right');
 
-        async function onStartClick() {
-            log("Button CLICKED.");
-            const btn = document.getElementById('btn-start');
-            btn.style.background = 'yellow';
-            btn.innerText = "ЗАГРУЗКА...";
+        // --- LAUNCHER ---
+        async function startVR() {
+            const btn = document.querySelector('.start-btn');
+            btn.innerText = "Загрузка...";
 
-            // 1. Fullscreen
-            try {
-                if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
-                else if (document.documentElement.webkitRequestFullscreen) await document.documentElement.webkitRequestFullscreen();
-                log("Fullscreen requested.");
-            } catch(e) { log("Fullscreen warn: " + e.message); }
+            // 1. Fullscreen Request
+            const doc = document.documentElement;
+            if (doc.requestFullscreen) doc.requestFullscreen().catch(()=>{});
+            else if (doc.webkitRequestFullscreen) doc.webkitRequestFullscreen().catch(()=>{});
 
-            // 2. Gyro Permissions
+            // 2. iOS Gyro Permission
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                log("iOS detected. Requesting Permission...");
                 try {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    log("Permission Response: " + response);
-                    if (response === 'granted') {
-                        startLoop();
-                    } else {
-                        log("CRITICAL: Permission Denied by User.");
-                        alert("Вы запретили доступ к гироскопу.");
+                    const resp = await DeviceOrientationEvent.requestPermission();
+                    if (resp !== 'granted') {
+                        alert("Нет доступа к гироскопу. VR не будет работать.");
+                        return;
                     }
                 } catch (e) {
-                    log("CRITICAL ERROR requesting permission: " + e.message);
-                    alert("Ошибка API: " + e.message);
+                    alert("Ошибка датчиков: " + e);
                 }
-            } else {
-                log("Non-iOS or old device. Starting immediately.");
-                startLoop();
             }
-        }
 
-        function startLoop() {
-            log("Starting Animation Loop...");
-            document.getElementById('start-screen').style.display = 'none';
+            // 3. Start App
+            document.getElementById('start-screen').style.opacity = 0;
+            setTimeout(() => document.getElementById('start-screen').remove(), 500);
+            
             window.addEventListener('deviceorientation', handleGyro);
-            animate();
-            log("Ready. Move device.");
+            isRunning = true;
+            renderLoop();
         }
 
+        // --- PHYSICS ---
         function handleGyro(e) {
-            // log(`Gyro: a=${Math.round(e.alpha)} b=${Math.round(e.beta)} g=${Math.round(e.gamma)}`);
-            // Uncomment above line only if desperate - it floods the log
-            
-            let g = e.gamma || 0;
-            let b = e.beta || 0;
+            if (!e.gamma && !e.beta) return;
 
-            // Clamping
-            if (g > 45) g = 45; if (g < -45) g = -45;
-            if (b > 45) b = 45; if (b < -45) b = -45;
+            // Ограничиваем углы, чтобы картинка не уходила в бесконечность
+            let g = Math.max(-45, Math.min(45, e.gamma || 0));
+            let b = Math.max(-45, Math.min(45, e.beta || 0));
 
-            targetX = g * 10;
-            targetY = b * 10;
+            // Конвертация угла в пиксели смещения
+            // Инверсия для эффекта "окна" (поворот головы влево -> контент вправо)
+            targetX = g * SENSITIVITY; 
+            targetY = b * SENSITIVITY;
         }
 
-        function animate() {
-            currentX += (targetX - currentX) * 0.1;
-            currentY += (targetY - currentY) * 0.1;
+        function renderLoop() {
+            if (!isRunning) return;
 
-            const tL = `translate(calc(-50% + ${currentX + 15}px), calc(-50% + ${currentY}px))`;
-            const tR = `translate(calc(-50% + ${currentX - 15}px), calc(-50% + ${currentY}px))`;
+            // Интерполяция (Lerp)
+            currentX += (targetX - currentX) * SMOOTHING;
+            currentY += (targetY - currentY) * SMOOTHING;
 
-            wLeft.style.transform = tL;
-            wRight.style.transform = tR;
-            
-            requestAnimationFrame(animate);
+            // Применение трансформации с учетом стерео-базы
+            // Левый глаз видит со смещением вправо (+), Правый влево (-)
+            const transformL = `translate(calc(-50% + ${currentX + STEREO_GAP}px), calc(-50% + ${currentY}px))`;
+            const transformR = `translate(calc(-50% + ${currentX - STEREO_GAP}px), calc(-50% + ${currentY}px))`;
+
+            wLeft.style.transform = transformL;
+            wRight.style.transform = transformR;
+
+            requestAnimationFrame(renderLoop);
         }
 
-        // --- MEDIA ---
-        async function setMode(mode) {
-            log("Mode: " + mode);
+        // --- CONTENT MANAGER ---
+        function clearStage() {
             wLeft.innerHTML = ''; wRight.innerHTML = '';
-
-            if (mode === 'cam') {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: 'environment' } 
-                    });
-                    log("Camera stream obtained.");
-                    
-                    const v = document.createElement('video');
-                    v.srcObject = stream;
-                    v.autoplay = true; v.muted = true; v.playsInline = true;
-                    
-                    wLeft.appendChild(v);
-                    wRight.appendChild(v.cloneNode());
-                    // Re-assign stream to clone
-                    wRight.querySelector('video').srcObject = stream;
-                    
-                } catch(e) {
-                    log("Camera Error: " + e.message);
-                    alert("Камера недоступна: " + e.message);
-                }
-            }
+            // Сброс всех потоков и видео
+            document.querySelectorAll('video').forEach(v => {
+                v.pause();
+                if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+            });
         }
 
-        function loadVideo(input) {
+        function loadFile(input, type) {
             const file = input.files[0];
             if (!file) return;
-            log("Video selected: " + file.name);
             const url = URL.createObjectURL(file);
-            
-            wLeft.innerHTML = `<video src="${url}" autoplay loop playsinline muted></video>`;
-            wRight.innerHTML = `<video src="${url}" autoplay loop playsinline muted></video>`;
-            
-            // Sync hack
-            const v1 = wLeft.querySelector('video');
-            const v2 = wRight.querySelector('video');
-            v1.onplay = () => v2.play();
-            v1.onpause = () => v2.pause();
+            clearStage();
+
+            if (type === 'img') {
+                const html = `<img src="${url}">`;
+                wLeft.innerHTML = html; wRight.innerHTML = html;
+            } else {
+                // Video Sync
+                const vL = createVideo(url, false);
+                const vR = createVideo(url, true);
+                
+                // Синхронизация
+                vL.onplay = () => vR.play();
+                vL.onpause = () => vR.pause();
+                vL.onseeking = () => vR.currentTime = vL.currentTime;
+
+                wLeft.appendChild(vL); wRight.appendChild(vR);
+                vL.play().catch(()=>{});
+            }
         }
+
+        async function activateCamera() {
+            clearStage();
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: {ideal: 1280} },
+                    audio: false
+                });
+
+                const vL = document.createElement('video');
+                vL.srcObject = stream;
+                vL.autoplay = true; vL.muted = true; vL.playsInline = true;
+
+                const vR = vL.cloneNode();
+                vR.srcObject = stream;
+                vR.autoplay = true; vR.muted = true; vR.playsInline = true;
+
+                wLeft.appendChild(vL); wRight.appendChild(vR);
+            } catch (e) {
+                alert("Камера недоступна (проверьте HTTPS).");
+            }
+        }
+
+        function createVideo(src, muted) {
+            const v = document.createElement('video');
+            v.src = src; v.loop = true; v.playsInline = true;
+            if (muted) v.muted = true;
+            return v;
+        }
+
+        // --- GESTURES (Tap to hide UI) ---
+        let lastTap = 0;
+        document.getElementById('vr-stage').addEventListener('click', () => {
+            const now = Date.now();
+            const ui = document.getElementById('ui-layer');
+            
+            // Double tap logic could go here, but keeping it simple for now
+            if (now - lastTap > 300) { 
+                ui.classList.toggle('hidden');
+            }
+            lastTap = now;
+        });
 
     </script>
 </body>
