@@ -3,348 +3,493 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stable VR Viewer</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>FPV VR PRO</title>
     <style>
-        /* --- БАЗОВЫЙ СБРОС --- */
+        /* --- SYSTEM RESET --- */
+        :root {
+            --ui-bg: rgba(18, 18, 18, 0.95);
+            --ui-border: 1px solid rgba(255, 255, 255, 0.15);
+            --accent: #00ff41; /* Cyberpunk Green */
+            --text-main: #eee;
+            --text-dim: #888;
+        }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             background-color: #000; overflow: hidden;
-            font-family: -apple-system, sans-serif;
-            color: #fff;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-main);
         }
 
-        /* --- СЦЕНА VR --- */
+        /* --- VR ENGINE LAYER --- */
         #vr-stage {
-            display: flex; width: 100%; height: 100%;
-            position: relative; z-index: 1;
+            display: flex; width: 100%; height: 100%; position: relative; z-index: 1;
         }
-
         .eye {
-            width: 50%; height: 100%;
-            position: relative; overflow: hidden;
-            border-right: 1px solid #333; background: #000;
+            width: 50%; height: 100%; position: relative; overflow: hidden;
+            border-right: 1px solid #111; background: #000;
         }
-        
-        /* КОНТЕЙНЕР КОНТЕНТА
-           Мы делаем его большим (140%), чтобы было куда двигаться.
-           Transition отключен, так как мы двигаем через JS каждый кадр.
-        */
+        .eye:last-child { border-right: none; }
+
+        /* The movable container */
         .world {
             position: absolute;
             top: 50%; left: 50%;
-            width: 140vw; height: 140vh; 
-            transform: translate(-50%, -50%);
+            /* Размеры задаются через JS в зависимости от настроек Zoom */
+            transform-origin: center center;
             display: flex; justify-content: center; align-items: center;
             will-change: transform; 
         }
 
         .world img, .world video {
-            width: 100%; height: 100%; object-fit: cover;
+            width: 100%; height: 100%; 
+            object-fit: cover; /* Или contain, меняется в настройках */
             pointer-events: none;
         }
 
-        /* --- ИНТЕРФЕЙС --- */
+        /* --- UI OVERLAY SYSTEM --- */
         #ui-layer {
-            position: fixed; bottom: 0; left: 0; width: 100%; 
-            display: flex; flex-direction: column; align-items: center;
-            z-index: 100; transition: opacity 0.3s; padding-bottom: 20px;
-            pointer-events: none; /* Пропускаем клики сквозь пустоту */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1000; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
         }
-        
+
+        /* Top Bar */
+        .top-bar {
+            padding: 15px; display: flex; justify-content: space-between; align-items: flex-start;
+            pointer-events: auto; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+        }
+
+        /* Bottom Controls */
         .dock {
-            background: rgba(30,30,30,0.9); 
-            padding: 15px 25px; border-radius: 40px;
-            display: flex; gap: 20px; pointer-events: auto;
-            border: 1px solid rgba(255,255,255,0.2);
+            pointer-events: auto; padding: 20px;
+            display: flex; justify-content: center; gap: 15px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
         }
 
-        button {
-            background: transparent; border: none; color: #fff;
-            font-weight: bold; font-size: 14px; text-transform: uppercase;
-            padding: 10px; cursor: pointer;
+        /* Buttons */
+        .btn {
+            background: rgba(30, 30, 30, 0.8); border: var(--ui-border);
+            color: white; padding: 12px 20px; border-radius: 8px;
+            font-size: 14px; font-weight: 600; text-transform: uppercase;
+            cursor: pointer; backdrop-filter: blur(5px); display: flex; align-items: center; gap: 8px;
         }
-        button:active { opacity: 0.7; }
-        
-        /* START SCREEN */
-        #start-screen {
+        .btn:active { background: var(--accent); color: #000; }
+        .btn-icon { font-size: 18px; }
+        .btn-primary { border-color: var(--accent); color: var(--accent); }
+
+        /* --- MODALS (Settings, Stream) --- */
+        .modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 2000;
-            display: flex; flex-direction: column; 
-            justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.8); z-index: 2000;
+            display: none; justify-content: center; align-items: center;
+            pointer-events: auto; backdrop-filter: blur(5px);
+        }
+        .modal-box {
+            background: var(--ui-bg); border: var(--ui-border);
+            width: 90%; max-width: 400px; max-height: 80vh; overflow-y: auto;
+            border-radius: 12px; padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px;
+        }
+        .modal-title { font-size: 18px; font-weight: bold; color: var(--accent); }
+        .close-btn { background: none; border: none; color: #666; font-size: 24px; cursor: pointer; }
+
+        /* Settings Inputs */
+        .setting-row { margin-bottom: 20px; }
+        .setting-label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+        .setting-val { color: var(--accent); font-family: monospace; }
+        
+        input[type="range"] {
+            width: 100%; height: 6px; background: #333; border-radius: 3px;
+            appearance: none; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none; width: 18px; height: 18px; background: var(--accent); border-radius: 50%; cursor: pointer;
         }
         
-        #btn-launch {
-            border: 2px solid #0f0; color: #0f0; padding: 20px 50px;
-            border-radius: 50px; font-size: 18px; letter-spacing: 2px;
+        input[type="text"] {
+            width: 100%; padding: 12px; background: #111; border: 1px solid #444;
+            color: #fff; border-radius: 6px; font-family: monospace; margin-bottom: 10px;
         }
 
-        /* ORIENTATION WARNING */
-        #rotate-msg {
+        /* --- UTILS --- */
+        .hidden { display: none !important; }
+        
+        #rotate-warning {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; z-index: 3000; display: none;
-            justify-content: center; align-items: center; text-align: center;
+            background: #000; z-index: 9999; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; color: var(--accent);
         }
-        @media (orientation: portrait) { #rotate-msg { display: flex; } }
+        @media (orientation: portrait) { #rotate-warning { display: flex; } }
 
     </style>
 </head>
 <body>
 
-    <!-- 1. Предупреждение о повороте -->
-    <div id="rotate-msg">
-        <div>
-            <div style="font-size:40px; margin-bottom:10px;">↻</div>
-            Поверните смартфон<br>горизонтально
-        </div>
+    <!-- 1. Rotate Warning -->
+    <div id="rotate-warning">
+        <div style="font-size: 50px; margin-bottom: 20px;">⟳</div>
+        <div>ПОВЕРНИТЕ ГОРИЗОНТАЛЬНО</div>
     </div>
 
-    <!-- 2. Экран запуска (обязателен для iOS) -->
-    <div id="start-screen">
-        <button id="btn-launch" onclick="launchVR()">ЗАПУСТИТЬ VR</button>
-        <p style="color:#777; font-size:12px; margin-top:15px">Нажмите для доступа к датчикам</p>
-    </div>
-
-    <!-- 3. Сцена -->
-    <div id="vr-stage">
+    <!-- 2. VR Stage -->
+    <div id="vr-stage" onclick="toggleUI()">
         <div class="eye"><div class="world" id="w-left"></div></div>
         <div class="eye"><div class="world" id="w-right"></div></div>
     </div>
 
-    <!-- 4. Меню -->
+    <!-- 3. UI Layer -->
     <div id="ui-layer">
+        <div class="top-bar">
+            <button class="btn" onclick="openSettings(event)">⚙ Настройки</button>
+            <button class="btn" onclick="App.recenter(event)">🎯 Центр</button>
+        </div>
+        
         <div class="dock">
-            <button onclick="document.getElementById('in-photo').click()">Фото</button>
-            <button onclick="document.getElementById('in-video').click()">Видео</button>
-            <button onclick="initCamera()">Камера</button>
-            <button onclick="recalibrate()" style="color: yellow">Центр</button>
+            <button class="btn" onclick="openStreamModal(event)">📡 URL Потока</button>
+            <button class="btn" onclick="triggerFile('img', event)">🖼 Фото</button>
+            <button class="btn" onclick="triggerFile('vid', event)">🎬 Видео</button>
+            <button class="btn btn-primary" onclick="App.init(event)">🚀 START / CAM</button>
         </div>
     </div>
 
-    <!-- Inputs -->
-    <input type="file" id="in-photo" accept="image/*" style="display:none" onchange="handleFile(this, 'img')">
-    <input type="file" id="in-video" accept="video/*" style="display:none" onchange="handleFile(this, 'vid')">
+    <!-- 4. Settings Modal -->
+    <div id="modal-settings" class="modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">НАСТРОЙКИ VR</div>
+                <button class="close-btn" onclick="closeModals()">×</button>
+            </div>
+            
+            <div class="setting-row">
+                <div class="setting-label">IPD (Стерео база) <span id="val-ipd" class="setting-val">0</span></div>
+                <input type="range" min="0" max="60" value="15" oninput="Config.set('ipd', this.value)">
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-label">Масштаб (Zoom) <span id="val-scale" class="setting-val">100%</span></div>
+                <input type="range" min="50" max="300" value="140" oninput="Config.set('scale', this.value)">
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-label">Чувствительность гиро <span id="val-sens" class="setting-val">15</span></div>
+                <input type="range" min="0" max="50" value="15" oninput="Config.set('sensitivity', this.value)">
+                <div style="font-size:10px; color:#666; margin-top:5px;">Поставьте 0 чтобы отключить гироскоп (статичный экран)</div>
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-label">Режим заполнения</div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn" onclick="Config.set('fit', 'cover')" style="flex:1; padding:8px;">Cover (Полный)</button>
+                    <button class="btn" onclick="Config.set('fit', 'contain')" style="flex:1; padding:8px;">Contain (Весь кадр)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Stream Input Modal -->
+    <div id="modal-stream" class="modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">FPV ПОТОК</div>
+                <button class="close-btn" onclick="closeModals()">×</button>
+            </div>
+            <p style="font-size:12px; color:#888; margin-bottom:15px;">
+                Поддерживается: HLS (.m3u8), MP4, WebM, MJPEG.<br>
+                RTSP не работает в браузере! Используйте HTTP конвертеры.
+            </p>
+            <input type="text" id="stream-url" placeholder="http://192.168.1.1:8080/video">
+            <button class="btn btn-primary" style="width:100%" onclick="loadStreamFromInput()">ЗАПУСТИТЬ</button>
+            
+            <div style="margin-top:20px; border-top:1px solid #333; padding-top:10px;">
+                <p style="font-size:12px; color:#666">Тестовые потоки:</p>
+                <button class="btn" style="width:100%; font-size:10px; margin-bottom:5px;" onclick="loadDemo('hls')">Demo HLS (Apple)</button>
+                <button class="btn" style="width:100%; font-size:10px;" onclick="loadDemo('bunny')">Demo MP4 (Bunny)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Files -->
+    <input type="file" id="file-img" accept="image/*" style="display:none" onchange="handleFile(this, 'img')">
+    <input type="file" id="file-vid" accept="video/*" style="display:none" onchange="handleFile(this, 'vid')">
 
     <script>
-        // --- КОНФИГУРАЦИЯ ---
-        // SMOOTH_FACTOR: 0.05 = очень плавно (медленно), 0.5 = быстро (но может дрожать)
-        const SMOOTH_FACTOR = 0.08; 
-        const SENSITIVITY = 15;     // Множитель движения пикселей
-        const STEREO_OFFSET = 15;   // Стерео-база
-        
-        // --- ПЕРЕМЕННЫЕ СОСТОЯНИЯ ---
-        let isRunning = false;
-        
-        // Позиция (текущая сглаженная)
-        let curX = 0, curY = 0;
-        // Позиция (целевая из датчика)
-        let targetX = 0, targetY = 0;
-        
-        // Калибровка (начальные углы)
-        let baseBeta = 0;  // X-axis (Left/Right look in Landscape)
-        let baseGamma = 0; // Y-axis (Up/Down look in Landscape)
+        // --- CONFIG MANAGER ---
+        const Config = {
+            ipd: 15,          // Сдвиг между глазами (px)
+            scale: 140,       // Zoom (%)
+            sensitivity: 15,  // Гироскоп мультпликатор
+            smoothing: 0.1,   // Плавность (меньше = плавнее)
+            fit: 'cover',     // object-fit
 
-        const wL = document.getElementById('w-left');
-        const wR = document.getElementById('w-right');
+            load: function() {
+                const saved = localStorage.getItem('vr_config_v1');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    Object.assign(this, parsed);
+                }
+                this.updateUI();
+                this.apply();
+            },
 
-        // --- ЗАПУСК ---
-        async function launchVR() {
-            // 1. Fullscreen
-            try {
-                if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
-                else if (document.documentElement.webkitRequestFullscreen) await document.documentElement.webkitRequestFullscreen();
-            } catch(e){}
+            set: function(key, val) {
+                this[key] = val;
+                this.updateUI();
+                this.apply();
+                localStorage.setItem('vr_config_v1', JSON.stringify(this));
+            },
 
-            // 2. Permission (iOS)
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            updateUI: function() {
+                document.getElementById('val-ipd').innerText = this.ipd + 'px';
+                document.getElementById('val-scale').innerText = this.scale + '%';
+                document.getElementById('val-sens').innerText = this.sensitivity;
+                // Update inputs positions
+                document.querySelector(`input[oninput*="'ipd'"]`).value = this.ipd;
+                document.querySelector(`input[oninput*="'scale'"]`).value = this.scale;
+                document.querySelector(`input[oninput*="'sensitivity'"]`).value = this.sensitivity;
+            },
+
+            apply: function() {
+                // Apply Scale
+                const w = document.querySelectorAll('.world');
+                w.forEach(el => {
+                    el.style.width = this.scale + 'vw';
+                    el.style.height = this.scale + 'vh';
+                });
+                
+                // Apply Object Fit
+                const content = document.querySelectorAll('.world img, .world video');
+                content.forEach(el => el.style.objectFit = this.fit);
+
+                // Recalculate immediate position if gyro is off
+                if (parseInt(this.sensitivity) === 0) {
+                    App.targetX = 0; App.targetY = 0;
+                }
+            }
+        };
+
+        // --- CORE APPLICATION ---
+        const App = {
+            isRunning: false,
+            baseBeta: null,
+            baseGamma: null,
+            curX: 0, curY: 0,
+            targetX: 0, targetY: 0,
+
+            init: async function(e) {
+                if(e) e.stopPropagation();
+
+                // 1. Fullscreen
+                const doc = document.documentElement;
+                if(doc.requestFullscreen) doc.requestFullscreen().catch(()=>{});
+                else if(doc.webkitRequestFullscreen) doc.webkitRequestFullscreen().catch(()=>{});
+
+                // 2. Permissions
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        const r = await DeviceOrientationEvent.requestPermission();
+                        if(r !== 'granted') alert("Гироскоп запрещен. Используйте настройки, чтобы отключить его.");
+                    } catch(err) { console.error(err); }
+                }
+
+                // 3. Start Camera Default
+                this.startCamera();
+
+                // 4. Start Loops
+                window.addEventListener('deviceorientation', this.handleGyro.bind(this));
+                if (!this.isRunning) {
+                    this.isRunning = true;
+                    this.loop();
+                }
+                
+                // Hide UI initially
+                document.getElementById('ui-layer').style.opacity = '0';
+                setTimeout(() => document.getElementById('ui-layer').style.pointerEvents = 'none', 300);
+            },
+
+            recenter: function(e) {
+                if(e) e.stopPropagation();
+                this.baseBeta = null; // Will reset on next frame
+                this.baseGamma = null;
+                // Visual feedback
+                const btn = e ? e.target : null;
+                if(btn) {
+                    const old = btn.innerText;
+                    btn.innerText = "OK!";
+                    setTimeout(()=> btn.innerText = old, 1000);
+                }
+            },
+
+            handleGyro: function(e) {
+                if (parseInt(Config.sensitivity) === 0) return; // Gyro Disabled
+
+                const rawBeta = e.beta || 0;
+                const rawGamma = e.gamma || 0;
+
+                if (this.baseBeta === null) {
+                    this.baseBeta = rawBeta;
+                    this.baseGamma = rawGamma;
+                    return;
+                }
+
+                let dX = rawGamma - this.baseGamma; // Up/Down (Landscape)
+                let dY = rawBeta - this.baseBeta;   // Left/Right (Landscape)
+
+                // Clamp to avoid flipping
+                dX = Math.max(-45, Math.min(45, dX));
+                dY = Math.max(-45, Math.min(45, dY));
+
+                // Mapping: In landscape, Gamma affects Y screen axis (up/down), Beta affects X (left/right)
+                // Wait, browsers are messy. Standard landscape:
+                // Beta is tilt front/back (Screen X axis shift)
+                // Gamma is tilt left/right (Screen Y axis shift)
+                
+                this.targetX = dY * Config.sensitivity; // Beta -> X
+                this.targetY = dX * Config.sensitivity; // Gamma -> Y
+            },
+
+            loop: function() {
+                if (!this.isRunning) return;
+
+                // Smoothing
+                this.curX += (this.targetX - this.curX) * Config.smoothing;
+                this.curY += (this.targetY - this.curY) * Config.smoothing;
+
+                const ipd = parseInt(Config.ipd);
+                
+                // Left Eye (Shift content Right)
+                const tL = `translate(calc(-50% + ${this.curX + ipd}px), calc(-50% + ${this.curY}px))`;
+                // Right Eye (Shift content Left)
+                const tR = `translate(calc(-50% + ${this.curX - ipd}px), calc(-50% + ${this.curY}px))`;
+
+                document.getElementById('w-left').style.transform = tL;
+                document.getElementById('w-right').style.transform = tR;
+
+                requestAnimationFrame(this.loop.bind(this));
+            },
+
+            startCamera: async function() {
+                this.clear();
                 try {
-                    const resp = await DeviceOrientationEvent.requestPermission();
-                    if (resp !== 'granted') {
-                        alert("Нет доступа к гироскопу");
-                        return;
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'environment', width: { ideal: 1920 } }, audio: false
+                    });
+                    this.injectVideo(stream, true); // true = isStreamObject
+                } catch(e) {
+                    alert("Ошибка камеры (нужен HTTPS): " + e.message);
+                }
+            },
+
+            clear: function() {
+                document.getElementById('w-left').innerHTML = '';
+                document.getElementById('w-right').innerHTML = '';
+                // Stop existing streams?
+            },
+
+            injectVideo: function(source, isStreamObject = false) {
+                const createV = () => {
+                    const v = document.createElement('video');
+                    v.autoplay = true; v.muted = true; v.loop = true;
+                    v.playsInline = true; v.setAttribute('playsinline', '');
+                    v.style.objectFit = Config.fit;
+                    if (isStreamObject) v.srcObject = source;
+                    else {
+                        v.src = source;
+                        v.crossOrigin = "anonymous"; // Try CORS
                     }
-                } catch (e) { alert(e); }
-            }
+                    return v;
+                };
 
-            // 3. UI Switch
-            document.getElementById('start-screen').style.display = 'none';
-            isRunning = true;
+                const vL = createV();
+                const vR = createV(); 
+                
+                // Sync Logic
+                if (!isStreamObject) {
+                    vL.addEventListener('play', () => vR.play());
+                    vL.addEventListener('pause', () => vR.pause());
+                    vL.addEventListener('seeking', () => vR.currentTime = vL.currentTime);
+                    // Force sync interval
+                    setInterval(() => {
+                        if (Math.abs(vL.currentTime - vR.currentTime) > 0.2) vR.currentTime = vL.currentTime;
+                    }, 2000);
+                }
+
+                document.getElementById('w-left').appendChild(vL);
+                document.getElementById('w-right').appendChild(vR);
+            },
             
-            // 4. Listeners
-            window.addEventListener('deviceorientation', handleOrientation);
-            // Запускаем игровой цикл рендеринга
-            requestAnimationFrame(renderLoop);
-        }
-
-        // --- ЛОГИКА ГИРОСКОПА (СТАБИЛИЗАЦИЯ) ---
-        function handleOrientation(e) {
-            if (!isRunning) return;
-
-            // В горизонтальном режиме (landscape):
-            // Beta (-180..180) - это наклон телефона "на себя / от себя". В очках это поворот ВЛЕВО-ВПРАВО.
-            // Gamma (-90..90) - это наклон "влево / вправо". В очках это наклон ВВЕРХ-ВНИЗ.
-
-            let rawBeta = e.beta; 
-            let rawGamma = e.gamma;
-
-            // Защита от null (бывает на десктопе или при старте)
-            if (rawBeta === null || rawGamma === null) return;
-
-            // Первая калибровка (установка нуля)
-            if (baseBeta === 0 && baseGamma === 0) {
-                baseBeta = rawBeta;
-                baseGamma = rawGamma;
+            injectImage: function(src) {
+                const html = `<img src="${src}" style="object-fit:${Config.fit}">`;
+                document.getElementById('w-left').innerHTML = html;
+                document.getElementById('w-right').innerHTML = html;
             }
+        };
 
-            // Вычисляем разницу от начальной позиции (Delta)
-            let diffX = rawBeta - baseBeta;
-            let diffY = rawGamma - baseGamma;
-
-            // Обработка "скачка" через 180 градусов (если вдруг перевернули)
-            // Но для VR очков обычно углы небольшие, так что просто ограничиваем (Clamp)
-            // Ограничиваем угол обзора до +/- 40 градусов, чтобы не выворачивать картинку
-            if (diffX > 40) diffX = 40;
-            if (diffX < -40) diffX = -40;
-            if (diffY > 40) diffY = 40;
-            if (diffY < -40) diffY = -40;
-
-            // Инверсия осей и применение чувствительности
-            // Beta (Left/Right) -> X axis
-            // Gamma (Up/Down) -> Y axis
-            targetX = diffX * SENSITIVITY; 
-            targetY = diffY * SENSITIVITY; 
+        // --- UI HANDLERS ---
+        function toggleUI() {
+            const ui = document.getElementById('ui-layer');
+            const op = ui.style.opacity;
+            if (op === '0' || op === '') {
+                ui.style.opacity = '1';
+                ui.style.pointerEvents = 'auto';
+            } else {
+                ui.style.opacity = '0';
+                ui.style.pointerEvents = 'none';
+            }
         }
 
-        function recalibrate() {
-            // Сброс калибровки, чтобы текущее положение стало центром
-            baseBeta = 0; 
-            baseGamma = 0; 
-            // При следующем событии orientation переменные обновятся
+        function openSettings(e) {
+            e.stopPropagation();
+            document.getElementById('modal-settings').style.display = 'flex';
         }
 
-        // --- РЕНДЕРИНГ (ПЛАВНОСТЬ) ---
-        function renderLoop() {
-            if (!isRunning) return;
-
-            // Линейная интерполяция (Lerp) для сглаживания рывков
-            // Каждый кадр мы двигаемся к цели на 8% (SMOOTH_FACTOR)
-            // Это фильтрует высокочастотный шум (дрожание рук)
-            curX += (targetX - curX) * SMOOTH_FACTOR;
-            curY += (targetY - curY) * SMOOTH_FACTOR;
-
-            // Применяем позицию
-            // Левый глаз: сдвигаем контент ВПРАВО (+offset)
-            // Правый глаз: сдвигаем контент ВЛЕВО (-offset)
-            const tL = `translate(calc(-50% + ${curX + STEREO_OFFSET}px), calc(-50% + ${curY}px))`;
-            const tR = `translate(calc(-50% + ${curX - STEREO_OFFSET}px), calc(-50% + ${curY}px))`;
-
-            wL.style.transform = tL;
-            wR.style.transform = tR;
-
-            requestAnimationFrame(renderLoop);
+        function openStreamModal(e) {
+            e.stopPropagation();
+            document.getElementById('modal-stream').style.display = 'flex';
         }
 
-        // --- МЕДИА ФУНКЦИИ ---
-        function clearStage() {
-            wL.innerHTML = ''; wR.innerHTML = '';
-            // Жесткая остановка всех видео
-            document.querySelectorAll('video').forEach(v => {
-                v.pause();
-                v.src = "";
-                if(v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
-            });
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+        }
+
+        function triggerFile(type, e) {
+            e.stopPropagation();
+            document.getElementById('file-' + type).click();
         }
 
         function handleFile(input, type) {
             const f = input.files[0];
             if (!f) return;
             const url = URL.createObjectURL(f);
-            
-            clearStage();
-
-            if (type === 'img') {
-                const img = `<img src="${url}">`;
-                wL.innerHTML = img; wR.innerHTML = img;
-            } else {
-                setupVideo(url);
-            }
+            App.clear();
+            if (type === 'img') App.injectImage(url);
+            else App.injectVideo(url);
         }
 
-        function setupVideo(url) {
-            // Создаем видео программно
-            const vL = document.createElement('video');
-            vL.src = url;
-            vL.loop = true;
-            vL.muted = true; // Важно для автостарта!
-            vL.playsInline = true; 
-            vL.setAttribute('playsinline', ''); // Для старых iOS
-            
-            const vR = vL.cloneNode(); // Копия для правого глаза
-            vR.src = url;
-            vR.loop = true;
-            vR.muted = true;
-            vR.playsInline = true;
-            vR.setAttribute('playsinline', '');
-
-            wL.appendChild(vL);
-            wR.appendChild(vR);
-
-            // Запускаем оба сразу
-            const p1 = vL.play();
-            const p2 = vR.play();
-
-            // Если браузер заблокировал автоплей (бывает с аудио), пробуем еще раз
-            if (p1 !== undefined) {
-                p1.catch(error => {
-                    alert("Нажмите на экран для старта видео (браузер заблокировал автоплей)");
-                });
-            }
-            
-            // Примитивная синхронизация при перемотке/паузе
-            // Синхронизируем раз в секунду или при клике, но не постоянно (вызывает лаги)
-            vL.addEventListener('timeupdate', () => {
-                // Если рассинхрон больше 0.5 сек, подгоняем правое видео
-                if (Math.abs(vL.currentTime - vR.currentTime) > 0.5) {
-                    vR.currentTime = vL.currentTime;
-                }
-            });
+        function loadStreamFromInput() {
+            const url = document.getElementById('stream-url').value;
+            if (!url) return;
+            App.clear();
+            App.injectVideo(url);
+            closeModals();
         }
 
-        async function initCamera() {
-            clearStage();
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' },
-                    audio: false
-                });
-
-                const vL = document.createElement('video');
-                vL.srcObject = stream;
-                vL.autoplay = true; vL.muted = true; vL.playsInline = true;
-                
-                const vR = document.createElement('video'); // Лучше создать новый, чем клонировать поток
-                vR.srcObject = stream;
-                vR.autoplay = true; vR.muted = true; vR.playsInline = true;
-
-                wL.appendChild(vL);
-                wR.appendChild(vR);
-            } catch (err) {
-                alert("Ошибка камеры: " + err.message);
-            }
+        function loadDemo(type) {
+            const url = type === 'hls' 
+                ? 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
+                : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+            document.getElementById('stream-url').value = url;
+            loadStreamFromInput();
         }
 
-        // --- УПРАВЛЕНИЕ КАСАНИЯМИ ---
-        // Одиночный клик по экрану скрывает/показывает меню
-        let lastTap = 0;
-        document.getElementById('vr-stage').addEventListener('click', (e) => {
-            const now = Date.now();
-            if (now - lastTap > 300) {
-                 const ui = document.getElementById('ui-layer');
-                 ui.style.opacity = (ui.style.opacity === '0') ? '1' : '0';
-                 ui.style.pointerEvents = (ui.style.opacity === '0') ? 'none' : 'auto';
-            }
-            lastTap = now;
-        });
+        // Init
+        Config.load();
 
     </script>
 </body>
